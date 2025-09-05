@@ -295,6 +295,7 @@ class History(Record):
     def __init__(self, agent):
         from agent import Agent
 
+        self.counter = 0
         self.bulks: list[Bulk] = []
         self.topics: list[Topic] = []
         self.current = Topic(history=self)
@@ -324,6 +325,7 @@ class History(Record):
     def add_message(
         self, ai: bool, content: MessageContent, tokens: int = 0
     ) -> Message:
+        self.counter += 1
         return self.current.add_message(ai, content=content, tokens=tokens)
 
     def new_topic(self):
@@ -340,6 +342,7 @@ class History(Record):
 
     @staticmethod
     def from_dict(data: dict, history: "History"):
+        history.counter = data.get("counter", 0)
         history.bulks = [Bulk.from_dict(b, history=history) for b in data["bulks"]]
         history.topics = [Topic.from_dict(t, history=history) for t in data["topics"]]
         history.current = Topic.from_dict(data["current"], history=history)
@@ -348,6 +351,7 @@ class History(Record):
     def to_dict(self):
         return {
             "_cls": "History",
+            "counter": self.counter,
             "bulks": [b.to_dict() for b in self.bulks],
             "topics": [t.to_dict() for t in self.topics],
             "current": self.current.to_dict(),
@@ -534,10 +538,17 @@ def _merge_outputs(a: MessageContent, b: MessageContent) -> MessageContent:
     if isinstance(a, str) and isinstance(b, str):
         return a + "\n" + b
 
-    if not isinstance(a, list):
-        a = [a]
-    if not isinstance(b, list):
-        b = [b]
+    def make_list(obj: MessageContent) -> list[MessageContent]:
+        if isinstance(obj, list):
+            return obj  # type: ignore
+        if isinstance(obj, dict):
+            return [obj]
+        if isinstance(obj, str):
+            return [{"type": "text", "text": obj}]
+        return [obj]
+
+    a = make_list(a)
+    b = make_list(b)
 
     return cast(MessageContent, a + b)
 
